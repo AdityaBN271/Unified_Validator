@@ -3,8 +3,49 @@ import re
 from collections import defaultdict
 from parser import parse_xml, preprocess_file_content
 from entity_checker import check_entities
-from tag_checker import validate_tags
+from tag_checker import validate_tags, check_tag_nesting
 from config import CUSTOM_ENTITIES, SUPPORTED_TAGS, NON_CLOSING_TAGS
+
+
+def check_invalid_angle_tags(raw_content, allowed_tags):
+    """
+    Detects and flags unsupported angle-bracketed tags like <random>
+    Skips valid dynamic and layout tags.
+    """
+    errors = []
+    tag_pattern = re.compile(r'<\s*/?\s*([a-zA-Z0-9_]+)[^>]*>')
+
+    layout_tags = {
+        "P20", "Page", "CN", "HN02", "HN24", "P00", "B22", "HN68", "B24", "HN46",
+        "B42", "P24", "P42", "B44", "B", "C5", "HN00", "HN20"
+    }
+
+    lines = raw_content.splitlines()
+    for line_num, line in enumerate(lines, 1):
+        stripped = line.strip()
+        if stripped.startswith(("<!--", "<?", "<!")):
+            continue
+
+        for match in tag_pattern.finditer(line):
+            tag = match.group(1)
+            tag_lower = tag.lower()
+
+            is_dynamic = tag_lower.startswith("fnt") or tag_lower.startswith("fnr")
+
+            if (
+                tag in allowed_tags or
+                tag in layout_tags or
+                is_dynamic
+            ):
+                continue
+
+            col = match.start() + 1
+            errors.append((
+                "Reptag", line_num, col, f"Unsupported tag <{tag}> found"
+            ))
+
+    return errors
+
 
 def validate_all_files(folder_path):
     results = {}
@@ -12,17 +53,16 @@ def validate_all_files(folder_path):
     for filename in os.listdir(folder_path):
         if filename.lower().endswith(('.fnt', '.xml', '.txt')):
             file_path = os.path.join(folder_path, filename)
-            
+
             with open(file_path, 'r', encoding='utf-8') as f:
                 raw_content = f.read()
 
-            # Enhanced Page Number Tracking
+            # Page tracking
             page_numbers = {}
             current_page = "1"
             lines = raw_content.splitlines()
-            
+
             for line_num, line in enumerate(lines, 1):
-                # Handle both <Page X> and <P20> tags more robustly
                 page_match = re.search(r'<Page\s+(\d+)\s*>', line, re.IGNORECASE)
                 if page_match:
                     current_page = page_match.group(1)
@@ -32,44 +72,58 @@ def validate_all_files(folder_path):
                         current_page = p20_match.group(1)
                 page_numbers[line_num] = current_page
 
-            # Validation Pipeline
-            cleaned_content = preprocess_file_content(raw_content)
-            tree, parse_errors, _ = parse_xml(cleaned_content)
             categorized_errors = []
 
-            # Process parse errors
+            # 🔍 Check for invalid tags BEFORE XML parse
+            invalid_tag_errors = check_invalid_angle_tags(raw_content, SUPPORTED_TAGS)
+            for cat, line, col, msg in invalid_tag_errors:
+                page = page_numbers.get(line, "1")
+                context = lines[line - 1].strip() if 0 < line <= len(lines) else "N/A"
+                categorized_errors.append((cat, line, page, msg, context))
+
+            # Parse
+            cleaned_content = preprocess_file_content(raw_content)
+            tree, parse_errors, _ = parse_xml(cleaned_content)
+
             for error in parse_errors:
-                if len(error) == 5:  # (category, line, col, msg, context)
+                if len(error) == 5:
                     cat, line, col, msg, context = error
                     page = page_numbers.get(line, "1")
                     categorized_errors.append((cat, line, page, msg, context))
 
-            # Add entity validation errors (Repent or Reptab)
+            # Entity errors (Repent, Reptab)
             entity_errors = check_entities(raw_content, CUSTOM_ENTITIES)
             for cat, line, col, msg in entity_errors:
                 page = page_numbers.get(line, "1")
-                context = lines[line-1].strip() if 0 < line <= len(lines) else "N/A"
+                context = lines[line - 1].strip() if 0 < line <= len(lines) else "N/A"
                 categorized_errors.append((cat, line, page, msg, context))
 
-            # Add tag validation errors (Reptag)
+            # Nesting check
+            nesting_errors = check_tag_nesting(raw_content)
+            for cat, line, col, msg in nesting_errors:
+                page = page_numbers.get(line, "1")
+                context = lines[line - 1].strip() if 0 < line <= len(lines) else "N/A"
+                categorized_errors.append((cat, line, page, msg, context))
+
+            # Tag structure and validation rules
             if tree is not None:
                 tag_errors = validate_tags(tree, SUPPORTED_TAGS, NON_CLOSING_TAGS)
                 for cat, line, col, msg in tag_errors:
                     page = page_numbers.get(line, "1")
-                    context = lines[line-1].strip() if 0 < line <= len(lines) else "N/A"
+                    context = lines[line - 1].strip() if 0 < line <= len(lines) else "N/A"
                     categorized_errors.append((cat, line, page, msg, context))
 
             results[filename] = categorized_errors
 
     return results
 
+
 def print_error_report(results):
-    """Prints a formatted validation report matching the desired output"""
     print("\n--- SCAN SUMMARY ---")
     total_files = len(results)
     total_errors = sum(len(errs) for errs in results.values())
     clean_files = sum(1 for errs in results.values() if not errs)
-    
+
     print(f"Files Scanned: {total_files}")
     print(f"Files with Errors: {total_files - clean_files}")
     print(f"Total Issues Found: {total_errors}\n")
@@ -80,24 +134,22 @@ def print_error_report(results):
             continue
 
         print(f"--- {filename}: {len(errors)} ISSUES ---\n")
-        
-        # Group by error type
+
         error_groups = defaultdict(list)
         for err in errors:
             error_groups[err[0]].append(err[1:])
 
         for category, err_list in error_groups.items():
-            # Color coding
             color = {
-                "Repent": "\033[91m",  # Red
-                "Reptag": "\033[93m",  # Yellow
-                "Reptab": "\033[94m",  # Blue
-                "CheckSGM": "\033[96m" # Cyan
+                "Repent": "\033[91m",
+                "Reptag": "\033[93m",
+                "Reptab": "\033[94m",
+                "CheckSGM": "\033[96m"
             }.get(category, "")
             reset = "\033[0m"
 
             print(f"{color}{category.upper()} ({len(err_list)}){reset}\n")
-            
+
             for line, page, msg, context in err_list:
                 print(f"Page {page}, Line {line}:")
                 print(msg)

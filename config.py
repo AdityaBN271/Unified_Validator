@@ -79,12 +79,18 @@ CUSTOM_ENTITIES = {
     "circle11", "circle12", "circle13", "circle14", "circle15", "circle16",
     "circle17", "circle18", "circle19", "circle20", "euro", "laquo", "raquo"
 }
+# In config.py (add this)
+BALANCED_TAGS = {
+    "EM", "EMB", "EMU", "EMS", "EMBI", "EMBU", "EMBUI", "EMBSUI", "EMBUSI",
+    "EMUI", "EMSI", "EMSUI", "SUP", "SUB", "sup", "sub", "FN", "T", "A", "AN", "author", "dgn"
+}
+
 
 # List of tags including non-closing tags
 SUPPORTED_TAGS = {
     'EM', 'EMB', 'EMU', 'EMS', 'EMBI', 'EMBU', 'EMBUI', 'EMBSUI', 'EMBUSI',
     'EMUI', 'EMSI', 'EMSUI', 'SUP', 'SUB', 'FN', 'T', 'A', 'fnr', 'fnt', 'P20',
-    'fnr*', 'fnt*', 'fnt1', 'fnt2', 'fnt3',                # Add all variants here too
+    'fnr*', 'fnt*', 'fnt1', 'fnt2', 'fnt3', 'AN',                # Add all variants here too
                       
 }
 

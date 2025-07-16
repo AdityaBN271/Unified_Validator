@@ -10,7 +10,7 @@ def preprocess_file_content(raw_content):
     page_tag_pattern = re.compile(r"<\s*Page\s+\d+\s*>", re.IGNORECASE)
     non_closing_tag_pattern = re.compile(r"<(fnt\d+|fnr\d+|fmt\d+)([^/>]*?)>", re.IGNORECASE)
 
-    layout_tags = {"P20", "CN", "HN02", "HN24", "P00", "B22", "HN68", "B24", "HN46"}
+    layout_tags = {"P20", "CN", "HN02", "HN24", "P00", "B22", "HN68", "B24", "HN46","B42","P24","P42","B44","B","C5","HN00","HN20"}
 
     cleaned_lines = []
     for line in raw_content.splitlines():
@@ -299,6 +299,9 @@ def parse_xml(raw_content):
                 category = "Reptag"
             else:
                 category = "CheckSGM"
+
+            if category == "Reptag" and "tag mismatch" in lower_msg and "root" in lower_msg:
+                continue
 
             # Get context line
             context = lines[entry.line-1].strip() if 0 < entry.line <= len(lines) else "N/A"

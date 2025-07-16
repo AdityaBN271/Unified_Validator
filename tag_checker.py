@@ -1,12 +1,12 @@
 from lxml import etree
 from entity_checker import check_entities
-from config import SUPPORTED_TAGS, NON_CLOSING_TAGS, TAG_RELATIONSHIPS
+from config import SUPPORTED_TAGS, NON_CLOSING_TAGS, TAG_RELATIONSHIPS, BALANCED_TAGS
 from lxml.etree import _Element
 import logging
-
-
+import re
 
 logger = logging.getLogger(__name__)
+
 
 def validate_tags(tree, allowed_tags=None, non_closing_tags=None, line_mapping=None):
     errors = []
@@ -20,7 +20,7 @@ def validate_tags(tree, allowed_tags=None, non_closing_tags=None, line_mapping=N
         tag_lower = tag.lower()
         return (tag_lower.startswith('fnt') and 
                 (tag_lower in {'fnt', 'fnt*'} or 
-                 tag_lower[3:].isdigit()))  # Matches fnt followed by digits
+                 tag_lower[3:].isdigit()))
 
     def is_non_closing(tag):
         """Returns True if tag is a non-closing tag (fnt*, fnr*, etc.)"""
@@ -42,6 +42,15 @@ def validate_tags(tree, allowed_tags=None, non_closing_tags=None, line_mapping=N
         line = elem.sourceline or 0
         col = getattr(elem, "sourcepos", 0)
         orig_line = line_mapping.get(line, line) if line_mapping else line
+
+        # ✅ Rule 0: Disallow unknown tags
+        if allowed_tags and tag not in allowed_tags:
+            errors.append((
+                "Reptag",
+                orig_line,
+                col,
+                f"Unsupported tag <{tag}> found"
+            ))
 
         # Rule 1: Any fnt variant must be inside FN
         if is_fnt_variant(tag) and parent_tag != 'FN':
@@ -84,7 +93,6 @@ def validate_tags(tree, allowed_tags=None, non_closing_tags=None, line_mapping=N
         elif event == "end":
             if tag == 'FN' and fn_stack:
                 fn_elem, fn_line, fn_col = fn_stack.pop()
-                # Check if FN contains any non-fnt elements
                 if any(not is_fnt_variant(child.tag) for child in fn_elem):
                     errors.append((
                         "Reptag",
@@ -94,4 +102,82 @@ def validate_tags(tree, allowed_tags=None, non_closing_tags=None, line_mapping=N
                     ))
 
     return errors
-    
+
+
+def check_tag_balancing(file_content):
+    """
+    Checks if all BALANCED_TAGS are properly opened and closed using a stack-based approach.
+    """
+    stack = []
+    errors = []
+    lines = file_content.splitlines()
+
+    tag_pattern = re.compile(r'<(/?)([a-zA-Z0-9]+)[^>]*>')
+
+    for line_num, line in enumerate(lines, 1):
+        for match in tag_pattern.finditer(line):
+            is_closing = match.group(1) == "/"
+            tag_name = match.group(2)
+
+            if tag_name in BALANCED_TAGS:
+                if not is_closing:
+                    stack.append((tag_name, line_num))
+                else:
+                    if not stack:
+                        errors.append((
+                            "Reptag", line_num, match.start() + 1,
+                            f"Unexpected closing tag </{tag_name}>"
+                        ))
+                    else:
+                        last_tag, last_line = stack.pop()
+                        if last_tag != tag_name:
+                            errors.append((
+                                "Reptag", line_num, match.start() + 1,
+                                f"Tag mismatch: expected </{last_tag}> but found </{tag_name}>"
+                            ))
+
+    for tag, line_num in stack:
+        errors.append((
+            "Reptag", line_num, 1, f"Unclosed tag <{tag}>"
+        ))
+
+    return errors
+
+
+def check_tag_nesting(file_content):
+    """
+    Checks for proper nesting of BALANCED_TAGS using a stack.
+    Flags unclosed, mismatched, or improperly nested tags.
+    """
+    errors = []
+    stack = []
+    lines = file_content.splitlines()
+    tag_pattern = re.compile(r'<(/?)([a-zA-Z0-9]+)[^>]*>')
+
+    for line_num, line in enumerate(lines, 1):
+        for match in tag_pattern.finditer(line):
+            is_closing = match.group(1) == '/'
+            tag = match.group(2)
+            col = match.start() + 1
+
+            if tag not in BALANCED_TAGS:
+                continue
+
+            if not is_closing:
+                stack.append((tag, line_num, col))
+            else:
+                if not stack:
+                    errors.append(("Reptag", line_num, col, f"Unexpected closing tag </{tag}>"))
+                    continue
+                last_tag, last_line, last_col = stack[-1]
+                if last_tag == tag:
+                    stack.pop()
+                else:
+                    errors.append(("Reptag", line_num, col,
+                                   f"Mismatched nesting: found </{tag}> but expected </{last_tag}> to close <{last_tag}> opened at line {last_line}"))
+                    stack.pop()
+
+    for unclosed_tag, line_num, col in stack:
+        errors.append(("Reptag", line_num, col, f"Unclosed tag <{unclosed_tag}>"))
+
+    return errors
