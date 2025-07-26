@@ -2,15 +2,13 @@ from lxml import etree
 import re
 
 # ========== CLEANER ==========
-# In parser.py
-# In parser.py
 def preprocess_file_content(raw_content):
     """Fix layout markers and dynamic non-closing tags for XML compatibility."""
-
     page_tag_pattern = re.compile(r"<\s*Page\s+\d+\s*>", re.IGNORECASE)
     non_closing_tag_pattern = re.compile(r"<(fnt\d+|fnr\d+|fmt\d+)([^/>]*?)>", re.IGNORECASE)
 
-    layout_tags = {"P20", "CN", "HN02", "HN24", "P00", "B22", "HN68", "B24", "HN46","B42","P24","P42","B44","B","C5","HN00","HN20"}
+    layout_tags = {"P20", "CN", "HN02", "HN24", "P00", "B22", "HN68", "B24", "HN46",
+                  "B42", "P24", "P42", "B44", "B", "C5", "HN00", "HN20"}
 
     cleaned_lines = []
     for line in raw_content.splitlines():
@@ -30,10 +28,6 @@ def preprocess_file_content(raw_content):
         cleaned_lines.append(line)
 
     return "\n".join(cleaned_lines)
-
-
-
-
 
 # ========== ENTITY CONVERTER ==========
 ENTITY_TO_NUMERIC = {
@@ -248,6 +242,7 @@ def sanitize_unescaped_ampersands(xml_str):
         return '&amp;'
 
     return re.sub(r'&(?!#|amp;|lt;|gt;|quot;|apos;|[a-zA-Z0-9]+;)', replacer, xml_str)
+
 # ========== PARSER ==========
 def parse_xml(raw_content):
     """
@@ -267,66 +262,61 @@ def parse_xml(raw_content):
         wrapped = f"<root>{cleaned_content}</root>"
         parser = etree.XMLParser(
             recover=False,
-            huge_tree=True,          # Enable support for deep documents
-            remove_blank_text=True,   # Reduce memory usage
-            remove_comments=True,     # Remove unnecessary nodes
-            resolve_entities=False    # Prevent external entity resolution
+            huge_tree=True,
+            remove_blank_text=True,
+            remove_comments=True,
+            resolve_entities=False
         )
         tree = etree.fromstring(wrapped.encode("utf-8"), parser)
         return tree, [], None
 
     except etree.XMLSyntaxError as e:
         categorized_errors = []
-        seen_positions = set()  # Tracks unique (line, column)
-        lines = raw_content.splitlines()  # For context extraction
+        seen_messages = set()  # Track unique error messages to avoid duplicates
+        lines = raw_content.splitlines()
 
         for entry in e.error_log:
             msg = entry.message.strip()
-            key = (entry.line, entry.column)
-
-            # Skip duplicates from same position
-            if key in seen_positions:
+            line = entry.line
+            col = entry.column
+            context = lines[line-1].strip() if 0 < line <= len(lines) else "N/A"
+            
+            # Skip duplicate messages
+            error_key = (line, col, msg)
+            if error_key in seen_messages:
                 continue
-            seen_positions.add(key)
+            seen_messages.add(error_key)
 
-            # Category classification
+            # Improved error categorization
             lower_msg = msg.lower()
-            if any(x in lower_msg for x in [
-                "xmlparseentityref", "unescaped", "no name", "amp", "lt", "gt", "semicolon"
-            ]):
+            if any(x in lower_msg for x in ["xmlparseentityref", "unescaped", "no name", "amp", "lt", "gt", "semicolon"]):
                 category = "Repent"
-            elif "tag mismatch" in lower_msg or "misnested" in lower_msg or "start tag" in lower_msg:
-                category = "Reptag"
+            elif "tag mismatch" in lower_msg:
+                # Skip root tag mismatch errors
+                if "root" in lower_msg:
+                    continue
+                # Check if this is actually a nesting issue
+                if "not properly nested" in lower_msg or "misnested" in lower_msg:
+                    category = "Reptag-nest"
+                else:
+                    category = "Reptag-mismatch"
+            elif "start tag" in lower_msg or "end tag" in lower_msg:
+                category = "Reptag-structure"
             else:
                 category = "CheckSGM"
 
-            if category == "Reptag" and "tag mismatch" in lower_msg and "root" in lower_msg:
-                continue
-
-            # Get context line
-            context = lines[entry.line-1].strip() if 0 < entry.line <= len(lines) else "N/A"
-
             categorized_errors.append((
                 category,
-                entry.line,
-                entry.column,
-                f" {msg}",
-                context  # Added context as 5th element
+                line,
+                col,
+                msg,
+                context
             ))
 
+        # Sort errors by line number for better reporting
+        categorized_errors.sort(key=lambda x: x[1])
+        
         return None, categorized_errors, None
 
     except Exception as e:
         return None, [("CheckSGM", 0, 0, f"Unexpected error: {str(e)}", "N/A")], None
-    
-
-
-        
-
-
-    
-
-
-
-
-

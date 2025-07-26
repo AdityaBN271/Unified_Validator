@@ -81,16 +81,16 @@ CUSTOM_ENTITIES = {
 }
 # In config.py (add this)
 BALANCED_TAGS = {
-    "EM", "EMB", "EMU", "EMS", "EMBI", "EMBU", "EMBUI", "EMBSUI", "EMBUSI",
-    "EMUI", "EMSI", "EMSUI", "SUP", "SUB", "sup", "sub", "FN", "T", "A", "AN", "author", "dgn"
+    "EM", "EMB", "EMU", "EMS", "EMBI", "EMBU", "EMBUI", "EMBUSI","EMUS","EMBS","EMBUS",
+    "EMUI", "EMSI", "EMUSI", "SUP", "SUB", "sup", "sub", "FN", "T", "A", "AN", "author", "dgn"
 }
 
 
 # List of tags including non-closing tags
 SUPPORTED_TAGS = {
-    'EM', 'EMB', 'EMU', 'EMS', 'EMBI', 'EMBU', 'EMBUI', 'EMBSUI', 'EMBUSI',
-    'EMUI', 'EMSI', 'EMSUI', 'SUP', 'SUB', 'FN', 'T', 'A', 'fnr', 'fnt', 'P20',
-    'fnr*', 'fnt*', 'fnt1', 'fnt2', 'fnt3', 'AN',                # Add all variants here too
+    'EM', 'EMB', 'EMU', 'EMS', 'EMBI', 'EMBU', 'EMBUI', 'EMBUSI','EMUS','EMBS','EMBUS',
+    'EMUI', 'EMSI', 'EMUSI', 'SUP', 'SUB', 'FN', 'T', 'A', 'fnr', 'fnt', 'P20',
+    'fnr*', 'fnt*', 'fnt1', 'fnt2', 'fnt3', 'AN', 'dgn'               # Add all variants here too
                       
 }
 
@@ -128,4 +128,10 @@ COLOR_CODING = {
     "Reptag": "\033[93m",  # Yellow
     "Reptab": "\033[94m",  # Blue (for table issues)
     "CheckSGM": "\033[96m" # Cyan
+}
+
+INVALID_NESTING_RULES = {
+    "EMB": {"EM", "EMB", "EMS", "EMU"},
+    "EMS": {"EM", "EMB", "EMS", "EMU"},
+    "EMU": {"EM", "EMB", "EMS", "EMU"},
 }

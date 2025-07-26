@@ -51,69 +51,93 @@ def validate_all_files(folder_path):
     results = {}
 
     for filename in os.listdir(folder_path):
-        if filename.lower().endswith(('.fnt', '.xml', '.txt')):
-            file_path = os.path.join(folder_path, filename)
+        file_path = os.path.join(folder_path, filename)
 
-            with open(file_path, 'r', encoding='utf-8') as f:
-                raw_content = f.read()
+        # ✅ Accept all files, ignore folders
+        if not os.path.isfile(file_path):
+            continue
 
-            # Page tracking
-            page_numbers = {}
-            current_page = "1"
-            lines = raw_content.splitlines()
+        with open(file_path, 'r', encoding='utf-8') as f:
+            raw_content = f.read()
 
-            for line_num, line in enumerate(lines, 1):
-                page_match = re.search(r'<Page\s+(\d+)\s*>', line, re.IGNORECASE)
-                if page_match:
-                    current_page = page_match.group(1)
-                elif '<P20>' in line:
-                    p20_match = re.search(r'<P20>(\d+)</P20>', line)
-                    if p20_match:
-                        current_page = p20_match.group(1)
-                page_numbers[line_num] = current_page
 
-            categorized_errors = []
+        # Page tracking
+        page_numbers = {}
+        current_page = "1"
+        lines = raw_content.splitlines()
 
-            # 🔍 Check for invalid tags BEFORE XML parse
-            invalid_tag_errors = check_invalid_angle_tags(raw_content, SUPPORTED_TAGS)
-            for cat, line, col, msg in invalid_tag_errors:
+        for line_num, line in enumerate(lines, 1):
+            page_match = re.search(r'<Page\s+(\d+)\s*>', line, re.IGNORECASE)
+            if page_match:
+                current_page = page_match.group(1)
+            elif '<P20>' in line:
+                p20_match = re.search(r'<P20>(\d+)</P20>', line)
+                if p20_match:
+                    current_page = p20_match.group(1)
+            page_numbers[line_num] = current_page
+
+        categorized_errors = []
+
+        # 🔍 Check for invalid tags BEFORE XML parse
+        invalid_tag_errors = check_invalid_angle_tags(raw_content, SUPPORTED_TAGS)
+        for cat, line, col, msg in invalid_tag_errors:
+            page = page_numbers.get(line, "1")
+            context = lines[line - 1].strip() if 0 < line <= len(lines) else "N/A"
+            categorized_errors.append((cat, line, page, msg, context))
+
+        # Parse
+        cleaned_content = preprocess_file_content(raw_content)
+        tree, parse_errors, _ = parse_xml(cleaned_content)
+
+        for error in parse_errors:
+            if len(error) == 5:
+                cat, line, col, msg, context = error
+                page = page_numbers.get(line, "1")
+                categorized_errors.append((cat, line, page, msg, context))
+
+        # Entity errors (Repent, Reptab)
+        entity_errors = check_entities(raw_content, CUSTOM_ENTITIES)
+        for cat, line, col, msg in entity_errors:
+            page = page_numbers.get(line, "1")
+            context = lines[line - 1].strip() if 0 < line <= len(lines) else "N/A"
+            categorized_errors.append((cat, line, page, msg, context))
+
+        # Nesting check
+        nesting_errors = check_tag_nesting(raw_content)
+        for cat, line, col, msg in nesting_errors:
+            page = page_numbers.get(line, "1")
+            context = lines[line - 1].strip() if 0 < line <= len(lines) else "N/A"
+            categorized_errors.append((cat, line, page, msg, context))
+
+        # Tag structure and validation rules
+        if tree is not None:
+            tag_errors = validate_tags(tree, SUPPORTED_TAGS, NON_CLOSING_TAGS)
+            for cat, line, col, msg in tag_errors:
                 page = page_numbers.get(line, "1")
                 context = lines[line - 1].strip() if 0 < line <= len(lines) else "N/A"
                 categorized_errors.append((cat, line, page, msg, context))
 
-            # Parse
-            cleaned_content = preprocess_file_content(raw_content)
-            tree, parse_errors, _ = parse_xml(cleaned_content)
+        # ✅ Deduplicate same errors (category, line, page, msg)
+        unique_errors = set()
+        deduped_errors = []
 
-            for error in parse_errors:
-                if len(error) == 5:
-                    cat, line, col, msg, context = error
-                    page = page_numbers.get(line, "1")
-                    categorized_errors.append((cat, line, page, msg, context))
-
-            # Entity errors (Repent, Reptab)
-            entity_errors = check_entities(raw_content, CUSTOM_ENTITIES)
-            for cat, line, col, msg in entity_errors:
-                page = page_numbers.get(line, "1")
-                context = lines[line - 1].strip() if 0 < line <= len(lines) else "N/A"
-                categorized_errors.append((cat, line, page, msg, context))
-
-            # Nesting check
-            nesting_errors = check_tag_nesting(raw_content)
-            for cat, line, col, msg in nesting_errors:
-                page = page_numbers.get(line, "1")
-                context = lines[line - 1].strip() if 0 < line <= len(lines) else "N/A"
-                categorized_errors.append((cat, line, page, msg, context))
-
-            # Tag structure and validation rules
-            if tree is not None:
-                tag_errors = validate_tags(tree, SUPPORTED_TAGS, NON_CLOSING_TAGS)
-                for cat, line, col, msg in tag_errors:
-                    page = page_numbers.get(line, "1")
-                    context = lines[line - 1].strip() if 0 < line <= len(lines) else "N/A"
-                    categorized_errors.append((cat, line, page, msg, context))
-
-            results[filename] = categorized_errors
+        for err in categorized_errors:
+    # For tag errors, use a more general key to avoid duplicates
+            if err[0].startswith("Reptag"):
+               line = err[1]
+               msg = err[3]
+        # Create a general key for similar tag errors
+               if "mismatch" in msg.lower() or "nest" in msg.lower():
+                   dedup_key = ("Reptag", line, "tag_structure_issue")
+               else:
+                   dedup_key = (err[0], err[1], err[2], err[3])
+            else:
+               dedup_key = (err[0], err[1], err[2], err[3])
+    
+            if dedup_key not in unique_errors:
+               unique_errors.add(dedup_key)
+               deduped_errors.append(err)
+        results[filename] = deduped_errors
 
     return results
 

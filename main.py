@@ -23,16 +23,17 @@ def main():
         # Process files one at a time with memory management
         results = {}
         for filename in os.listdir(SAMPLES_FOLDER):
-            if filename.lower().endswith(('.fnt', '.xml', '.txt')):
-                try:
-                    print(f"\nProcessing {filename}...")
-                    file_results = validate_all_files(SAMPLES_FOLDER)  # Note: This currently processes all files
-                    results.update(file_results)
-                    gc.collect()  # Force garbage collection between files
-                except Exception as file_error:
-                    logging.error(f"Failed to process {filename}: {str(file_error)}")
-                    print(f"⚠ Error processing {filename}: {str(file_error)}")
-                    continue
+          file_path = os.path.join(SAMPLES_FOLDER, filename)
+          if os.path.isfile(file_path):  # Only process files, not directories
+            try:
+                print(f"\nProcessing {filename}...")
+                file_results = validate_all_files(SAMPLES_FOLDER)
+                results.update(file_results)
+                gc.collect()
+            except Exception as file_error:
+               logging.error(f"Failed to process {filename}: {str(file_error)}")
+               print(f"⚠ Error processing {filename}: {str(file_error)}")
+               continue
 
         print_error_report(results)
         
@@ -42,7 +43,6 @@ def main():
         logging.error(error_msg)
         print("Check if:")
         print("- Files exist in Samples/ folder")
-        print("- Files have .FNT/.XML extensions")
         print("- Files are not corrupted or too large")
 
 if __name__ == "__main__":
