@@ -3,7 +3,7 @@ import re
 from collections import defaultdict
 from parser import parse_xml, preprocess_file_content
 from entity_checker import check_entities
-from tag_checker import validate_tags, check_tag_nesting
+from tag_checker import validate_tags, check_tag_nesting,check_cross_page_tags
 from config import CUSTOM_ENTITIES, SUPPORTED_TAGS, NON_CLOSING_TAGS
 
 
@@ -108,6 +108,13 @@ def validate_all_files(folder_path):
             page = page_numbers.get(line, "1")
             context = lines[line - 1].strip() if 0 < line <= len(lines) else "N/A"
             categorized_errors.append((cat, line, page, msg, context))
+        
+        cross_page_errors = check_cross_page_tags(raw_content)
+        for cat, line, col, msg in cross_page_errors:
+            page = page_numbers.get(line, "1")
+            context = lines[line - 1].strip() if 0 < line <= len(lines) else "N/A"
+            categorized_errors.append((cat, line, page, msg, context))
+
 
         # Tag structure and validation rules
         if tree is not None:

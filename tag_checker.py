@@ -268,3 +268,49 @@ def check_tag_nesting(file_content):
         errors.append(("Reptag", line_num, col, f"Unclosed tag <{unclosed_tag}>"))
 
     return errors
+
+def check_cross_page_tags(file_content):
+    """
+    Ensures that tags opened in one <Page> block are closed within the same page.
+    """
+    errors = []
+    lines = file_content.splitlines()
+
+    tag_stack = []  # Stack of (tag, page_num, line_num, col)
+    page_line_map = {}  # line_num → page_num
+
+    current_page = "1"
+    for line_num, line in enumerate(lines, 1):
+        page_match = re.search(r'<Page\s+(\d+)\s*>', line, re.IGNORECASE)
+        if page_match:
+            current_page = page_match.group(1)
+        page_line_map[line_num] = current_page
+
+    tag_pattern = re.compile(r'<(/?)([A-Za-z][A-Za-z0-9]*)(?:\s[^>]*?)?>')
+
+    for line_num, line in enumerate(lines, 1):
+        for match in tag_pattern.finditer(line):
+            is_closing = match.group(1) == '/'
+            tag_name = match.group(2)
+            col = match.start() + 1
+            page_num = page_line_map.get(line_num, "1")
+
+            if is_closing:
+                # Try to match with top of stack
+                for i in range(len(tag_stack) - 1, -1, -1):
+                    t, pg, ln, cl = tag_stack[i]
+                    if t == tag_name:
+                        if pg != page_num:
+                            errors.append((
+                                "Reptag",
+                                ln,
+                                cl,
+                                f"Tag <{tag_name}> opened in Page {pg} but closed in Page {page_num} — must close in same page"
+                            ))
+                        tag_stack.pop(i)
+                        break
+            else:
+                # Opening tag
+                tag_stack.append((tag_name, page_num, line_num, col))
+
+    return errors

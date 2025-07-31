@@ -286,6 +286,8 @@ def parse_xml(raw_content):
             if error_key in seen_messages:
                 continue
             seen_messages.add(error_key)
+            if "Premature end of data in tag" in msg:
+                continue
 
             # Improved error categorization
             lower_msg = msg.lower()
