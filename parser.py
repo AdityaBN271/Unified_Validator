@@ -5,27 +5,35 @@ import re
 def preprocess_file_content(raw_content):
     """Fix layout markers and dynamic non-closing tags for XML compatibility."""
     page_tag_pattern = re.compile(r"<\s*Page\s+\d+\s*>", re.IGNORECASE)
-    non_closing_tag_pattern = re.compile(r"<(fnt\d+|fnr\d+|fmt\d+)([^/>]*?)>", re.IGNORECASE)
+    non_closing_tag_pattern = {"fnt","fnr"}
 
-    layout_tags = {"P20", "CN", "HN02", "HN24", "P00", "B22", "HN68", "B24", "HN46",
+    head_foot = {"\*\*\*\*HEADNOTE\*\*\*\*","\*\*\*\*FOOTNOTE\*\*\*\*"}
+
+    layout_tags = {"P20", "CN", "HN02", "HN24", "P00","B22", "HN68","P02", "B24", "HN46",
                   "B42", "P24", "P42", "B44", "B", "C5", "HN00", "HN20"}
 
     cleaned_lines = []
     for line in raw_content.splitlines():
         line = page_tag_pattern.sub("<Page/>", line)
 
-        # Fix layout tags (even if they contain attributes or whitespace)
+    # 🔥 Remove all <SPage ...> tags
+        line = re.sub(r"<\s*SPage\b[^>]*>", "", line, flags=re.IGNORECASE)
+
+    # Fix layout tags
         for tag in layout_tags:
             line = re.sub(rf"<\s*{tag}(\s[^>]*)?>", rf"<{tag}\1/>", line)
 
-        # Convert fnt*/fnr*/fmt* into self-closing tags
-        def replacer(m):
-            tag = m.group(1)
-            attrs = m.group(2).strip()
-            return f"<{tag}{' ' + attrs if attrs else ''}/>"
-        line = non_closing_tag_pattern.sub(replacer, line)
+        for tag in non_closing_tag_pattern:
+            line = re.sub(rf"<\s*{tag}[^/>]*(\s[^>]*)?>", rf"<{tag}\1/>", line)
+
+        for tag in head_foot:
+            line = re.sub(rf"<\s*{tag}(\s[^>]*)?>", rf"", line)
+
+        line = re.sub("\r\n\r\n", "", line)
 
         cleaned_lines.append(line)
+
+
 
     return "\n".join(cleaned_lines)
 

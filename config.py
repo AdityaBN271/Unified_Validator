@@ -81,16 +81,16 @@ CUSTOM_ENTITIES = {
 }
 # In config.py (add this)
 BALANCED_TAGS = {
-    "EM", "EMB", "EMU", "EMS", "EMBI", "EMBU", "EMBUI", "EMBUSI","EMUS","EMBS","EMBUS",
+    "EM", "EMB", "EMU", "EMS", "EMBI", "EMBU", "EMBUI", "EMBUSI","EMUS","EMBS","EMBUS","IMAGE"
     "EMUI", "EMSI", "EMUSI", "SUP", "SUB", "sup", "sub", "FN", "T", "A", "AN", "author", "dgn"
 }
 
 
 # List of tags including non-closing tags
 SUPPORTED_TAGS = {
-    'EM', 'EMB', 'EMU', 'EMS', 'EMBI', 'EMBU', 'EMBUI', 'EMBUSI','EMUS','EMBS','EMBUS',
-    'EMUI', 'EMSI', 'EMUSI', 'SUP', 'SUB', 'FN', 'T', 'A', 'fnr', 'fnt', 'P20',
-    'fnr*', 'fnt*', 'fnt1', 'fnt2', 'fnt3', 'AN', 'dgn'               # Add all variants here too
+    'EM', 'EMB', 'EMU', 'EMS', 'EMBI', 'EMBU', 'EMBUI', 'EMBUSI','EMUS','EMBS','EMBUS',"author","IMAGE",
+    'EMUI', 'EMSI', 'EMUSI', 'SUP', 'SUB', 'FN', 'T', 'A', 'fnr', 'fnt', 'P20','P02',
+    'fnr*', 'fnt*', 'fnt1', 'fnt2', 'fnt3', 'AN', 'dgn',"****HEADNOTE****","<****FOOTNOTE****>"             # Add all variants here too
                       
 }
 

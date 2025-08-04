@@ -1,1 +1,10 @@
 2025-07-15 15:07:39,481 - ERROR - Failed to process A0506-23.fnt: 'NoneType' object is not iterable
+2025-07-31 17:41:00,251 - ERROR - Failed to process 761FS3D.FNT: no such group
+2025-07-31 17:53:27,345 - ERROR - Failed to process 761FS3D.FNT: no such group
+2025-07-31 18:10:08,819 - ERROR - Failed to process 761FS3D.FNT: sub() missing 1 required positional argument: 'string'
+2025-07-31 18:24:23,943 - ERROR - Failed to process 761FS3D.FNT: multiple repeat at position 4
+2025-07-31 18:30:52,666 - ERROR - Failed to process 761FS3D.FNT: multiple repeat at position 4
+2025-07-31 18:31:56,222 - ERROR - Failed to process 761FS3D.FNT: multiple repeat at position 4
+2025-08-03 14:42:04,065 - ERROR - Failed to process 761FS3D.FNT: sub() missing 2 required positional arguments: 'repl' and 'string'
+2025-08-03 14:42:40,162 - ERROR - Failed to process 761FS3D.FNT: sub() missing 2 required positional arguments: 'repl' and 'string'
+2025-08-03 14:43:28,725 - ERROR - Failed to process 761FS3D.FNT: sub() missing 2 required positional arguments: 'repl' and 'string'

@@ -7,6 +7,53 @@ import re
 
 logger = logging.getLogger(__name__)
 
+def is_valid_layout_tag(tag):
+    """
+    Validates layout tags like P24, B10, HN2, P2, P2,10, B10,12, etc.
+    Rules:
+    - Tag starts with P, B, or HN
+    - Contains 1 or 2 numbers, each must be multiple of 2 (2–20)
+    - If either number is two-digit, comma is required
+    - If single combined (e.g., P24), split into digits
+    """
+    match = re.match(r'^(P|B|HN)(\d{1,2})(?:,(\d{1,2}))?$', tag)
+    if not match:
+        return False
+
+    prefix, first, second = match.group(1), match.group(2), match.group(3)
+
+    try:
+        # If comma present
+        if second is not None:
+            first_val = int(first)
+            second_val = int(second)
+        else:
+            # If only one number present
+            if len(first) == 2:
+                first_val = int(first[0])
+                second_val = int(first[1])
+            else:
+                first_val = int(first)
+                second_val = None
+    except ValueError:
+        return False
+
+    # Helper: check if number is valid multiple of 2 up to 20
+    is_valid = lambda x: x in range(2, 21, 2)
+
+    if not is_valid(first_val):
+        return False
+
+    if second_val is not None and not is_valid(second_val):
+        return False
+
+    # If either value is two-digit, comma must be present
+    if second_val is not None and (first_val >= 10 or second_val >= 10) and second is None:
+        return False
+
+    return True
+
+
 
 def validate_tags(tree, allowed_tags=None, non_closing_tags=None, line_mapping=None):
     errors = []
@@ -40,7 +87,8 @@ def validate_tags(tree, allowed_tags=None, non_closing_tags=None, line_mapping=N
         col = getattr(elem, "sourcepos", 0)
         orig_line = line_mapping.get(line, line) if line_mapping else line
 
-        if allowed_tags and tag not in allowed_tags:
+        if allowed_tags and tag not in allowed_tags and not is_valid_layout_tag(tag):
+
             errors.append((
                 "Reptag",
                 orig_line,
