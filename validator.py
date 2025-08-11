@@ -101,10 +101,14 @@ def check_blank_lines_after_page_one(raw_content):
     return errors
 
 
-def validate_all_files(folder_path):
+def validate_all_files(folder_path, files_to_check=None):
     results = {}
 
-    for filename in os.listdir(folder_path):
+    # If no file list provided, read all from folder
+    if files_to_check is None:
+        files_to_check = os.listdir(folder_path)
+
+    for filename in files_to_check:
         file_path = os.path.join(folder_path, filename)
 
         if not os.path.isfile(file_path):
@@ -112,7 +116,6 @@ def validate_all_files(folder_path):
 
         with open(file_path, 'r', encoding='utf-8') as f:
             raw_content = f.read()
-
         # Track page numbers
         page_numbers = {}
         current_page = "1"

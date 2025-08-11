@@ -1,49 +1,59 @@
 import os
-from validator import validate_all_files, print_error_report
-from config import CUSTOM_ENTITIES, SUPPORTED_TAGS
+import sys
 import logging
 import gc
+from validator import validate_all_files, print_error_report
 
 def main():
-    # Configure basic logging
+    # Configure logging
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(levelname)s - %(message)s',
         filename='validator.log'
     )
-    
-    # Use relative path to Samples folder
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    SAMPLES_FOLDER = os.path.join(BASE_DIR, "Samples")
-    
-    print(f"  Scanning folder: {SAMPLES_FOLDER}")
-    print(f"  Files detected: {os.listdir(SAMPLES_FOLDER)}")
+
+    # Get path from argument or input
+    if len(sys.argv) > 1:
+        input_path = sys.argv[1]
+    else:
+        input_path = input("Enter the file or folder path to validate: ").strip()
+
+    # Clean up the path
+    input_path = os.path.abspath(os.path.expanduser(input_path))
+
+    # Check if path exists
+    if not os.path.exists(input_path):
+        print(f"❌ Error: '{input_path}' does not exist.")
+        return
 
     try:
-        # Process files one at a time with memory management
-        results = {}
-        for filename in os.listdir(SAMPLES_FOLDER):
-          file_path = os.path.join(SAMPLES_FOLDER, filename)
-          if os.path.isfile(file_path):  # Only process files, not directories
-            try:
-                print(f"\nProcessing {filename}...")
-                file_results = validate_all_files(SAMPLES_FOLDER)
-                results.update(file_results)
-                gc.collect()
-            except Exception as file_error:
-               logging.error(f"Failed to process {filename}: {str(file_error)}")
-               print(f"⚠ Error processing {filename}: {str(file_error)}")
-               continue
+        # If it's a single file, validate only that file
+        if os.path.isfile(input_path):
+            folder = os.path.dirname(input_path)
+            file_list = [os.path.basename(input_path)]
+        # If it's a folder, validate all files in it
+        elif os.path.isdir(input_path):
+            folder = input_path
+            file_list = os.listdir(folder)
+        else:
+            print(f"❌ Error: '{input_path}' is neither a file nor a folder.")
+            return
 
+        if not file_list:
+            print("⚠ No files found to validate.")
+            return
+
+        print(f"📂 Scanning: {folder}")
+        print(f"📄 Files detected: {file_list}")
+
+        results = validate_all_files(folder, file_list)
         print_error_report(results)
-        
+        gc.collect()
+
     except Exception as e:
         error_msg = f"Critical error: {str(e)}"
         print(f"\n{error_msg}")
         logging.error(error_msg)
-        print("Check if:")
-        print("- Files exist in Samples/ folder")
-        print("- Files are not corrupted or too large")
 
 if __name__ == "__main__":
     main()
