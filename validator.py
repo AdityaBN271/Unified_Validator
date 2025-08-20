@@ -8,6 +8,14 @@ from config import CUSTOM_ENTITIES, SUPPORTED_TAGS, NON_CLOSING_TAGS
 
 
 def is_valid_layout_tag(tag):
+    """
+    Validates layout tags like P24, B10, HN2, P00, P2,10, B10,12, etc.
+    Rules:
+    - Tag starts with P, B, or HN
+    - Contains 1 or 2 numbers
+    - Each number must be 0 or a multiple of 2 (0–20)
+    - If either number is two-digit, comma is required
+    """
     match = re.match(r'^(P|B|HN)(\d{1,2})(?:,(\d{1,2}))?$', tag)
     if not match:
         return False
@@ -20,6 +28,7 @@ def is_valid_layout_tag(tag):
             second_val = int(second)
         else:
             if len(first) == 2:
+                # Split two-digit number into separate digits (e.g., P24 -> 2 and 4)
                 first_val = int(first[0])
                 second_val = int(first[1])
             else:
@@ -28,19 +37,31 @@ def is_valid_layout_tag(tag):
     except ValueError:
         return False
 
-    is_valid = lambda x: x in range(2, 21, 2)
+    # ✅ Allow 0 and even numbers up to 20
+    is_valid = lambda x: x == 0 or x in range(2, 21, 2)
 
     if not is_valid(first_val):
         return False
     if second_val is not None and not is_valid(second_val):
         return False
+
+    # If either number is two-digit, comma must be present
     if second_val is not None and (first_val >= 10 or second_val >= 10) and second is None:
         return False
 
     return True
 
 
+
 def check_invalid_angle_tags(raw_content, allowed_tags):
+    """
+    Detects unsupported angle-bracket tags like <random>.
+    Skips:
+    - Known allowed tags (from config)
+    - Layout tags (Pxx, Bxx, HNxx, etc.)
+    - Dynamic tags (fnt/fnr)
+    - Artificial wrapper <root>
+    """
     errors = []
     tag_pattern = re.compile(r'<\s*/?\s*([a-zA-Z0-9_]+)[^>]*>')
 
@@ -52,12 +73,20 @@ def check_invalid_angle_tags(raw_content, allowed_tags):
     lines = raw_content.splitlines()
     for line_num, line in enumerate(lines, 1):
         stripped = line.strip()
+
+        # Skip comments, XML declarations, and DOCTYPE
         if stripped.startswith(("<!--", "<?", "<!")):
             continue
 
         for match in tag_pattern.finditer(line):
             tag = match.group(1)
             tag_lower = tag.lower()
+
+            # Skip artificial wrapper
+            if tag_lower == "root":
+                continue
+
+            # Dynamic tags like fnt/fnr
             is_dynamic = tag_lower.startswith("fnt") or tag_lower.startswith("fnr")
 
             if (
@@ -69,9 +98,15 @@ def check_invalid_angle_tags(raw_content, allowed_tags):
                 continue
 
             col = match.start() + 1
-            errors.append(("Reptag", line_num, col, f"Unsupported tag <{tag}> found"))
+            errors.append((
+                "Reptag",
+                line_num,
+                col,
+                f"Unsupported tag <{tag}> found"
+            ))
 
     return errors
+
 
 
 def check_blank_lines_after_page_one(raw_content):
@@ -116,6 +151,10 @@ def validate_all_files(folder_path, files_to_check=None):
 
         with open(file_path, 'r', encoding='utf-8') as f:
             raw_content = f.read()
+
+        # ✅ Remove artificial <root> wrapper if present
+        raw_content = re.sub(r"<\s*/?\s*root\s*>", "", raw_content, flags=re.IGNORECASE)
+
         # Track page numbers
         page_numbers = {}
         current_page = "1"
@@ -133,14 +172,14 @@ def validate_all_files(folder_path, files_to_check=None):
 
         categorized_errors = []
 
-        # New blank-line check after <Page 1>
+        # 🔍 Blank-line check after <Page 1>
         blank_line_errors = check_blank_lines_after_page_one(raw_content)
         for cat, line, col, msg in blank_line_errors:
             page = page_numbers.get(line, "1")
             context = lines[line - 1].strip() if 0 < line <= len(lines) else "N/A"
             categorized_errors.append((cat, line, page, msg, context))
 
-        # Remove SPage tags and check invalid tags
+        # 🔍 Remove <SPage> and check invalid tags
         raw_content = re.sub(r"<\s*SPage\b[^>]*>", "", raw_content, flags=re.IGNORECASE)
         invalid_tag_errors = check_invalid_angle_tags(raw_content, SUPPORTED_TAGS)
         for cat, line, col, msg in invalid_tag_errors:
@@ -148,7 +187,7 @@ def validate_all_files(folder_path, files_to_check=None):
             context = lines[line - 1].strip() if 0 < line <= len(lines) else "N/A"
             categorized_errors.append((cat, line, page, msg, context))
 
-        # Parse XML
+        # 🔍 Parse XML
         cleaned_content = preprocess_file_content(raw_content)
         tree, parse_errors, _ = parse_xml(cleaned_content)
         for error in parse_errors:
@@ -157,28 +196,28 @@ def validate_all_files(folder_path, files_to_check=None):
                 page = page_numbers.get(line, "1")
                 categorized_errors.append((cat, line, page, msg, context))
 
-        # Entities
+        # 🔍 Entities
         entity_errors = check_entities(raw_content, CUSTOM_ENTITIES)
         for cat, line, col, msg in entity_errors:
             page = page_numbers.get(line, "1")
             context = lines[line - 1].strip() if 0 < line <= len(lines) else "N/A"
             categorized_errors.append((cat, line, page, msg, context))
 
-        # Nesting
+        # 🔍 Nesting
         nesting_errors = check_tag_nesting(raw_content)
         for cat, line, col, msg in nesting_errors:
             page = page_numbers.get(line, "1")
             context = lines[line - 1].strip() if 0 < line <= len(lines) else "N/A"
             categorized_errors.append((cat, line, page, msg, context))
 
-        # Cross-page tags
+        # 🔍 Cross-page tags
         cross_page_errors = check_cross_page_tags(raw_content)
         for cat, line, col, msg in cross_page_errors:
             page = page_numbers.get(line, "1")
             context = lines[line - 1].strip() if 0 < line <= len(lines) else "N/A"
             categorized_errors.append((cat, line, page, msg, context))
 
-        # Tag structure
+        # 🔍 Tag structure (only if parsing succeeded)
         if tree is not None:
             tag_errors = validate_tags(tree, SUPPORTED_TAGS, NON_CLOSING_TAGS)
             for cat, line, col, msg in tag_errors:
@@ -186,7 +225,7 @@ def validate_all_files(folder_path, files_to_check=None):
                 context = lines[line - 1].strip() if 0 < line <= len(lines) else "N/A"
                 categorized_errors.append((cat, line, page, msg, context))
 
-        # Deduplicate
+        # ✅ Deduplicate
         unique_errors = set()
         deduped_errors = []
         for err in categorized_errors:
@@ -206,6 +245,7 @@ def validate_all_files(folder_path, files_to_check=None):
         results[filename] = deduped_errors
 
     return results
+
 
 
 def print_error_report(results):

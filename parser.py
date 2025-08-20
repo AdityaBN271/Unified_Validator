@@ -16,7 +16,7 @@ def preprocess_file_content(raw_content):
     for line in raw_content.splitlines():
         line = page_tag_pattern.sub("<Page/>", line)
 
-    # 🔥 Remove all <SPage ...> tags
+    #  Remove all <SPage ...> tags
         line = re.sub(r"<\s*SPage\b[^>]*>", "", line, flags=re.IGNORECASE)
 
     # Fix layout tags
@@ -252,22 +252,24 @@ def sanitize_unescaped_ampersands(xml_str):
     return re.sub(r'&(?!#|amp;|lt;|gt;|quot;|apos;|[a-zA-Z0-9]+;)', replacer, xml_str)
 
 # ========== PARSER ==========
+
+
 def parse_xml(raw_content):
     """
-    Parses XML after cleaning page tags and escaping bad characters.
+    Parses XML/SGML after cleaning.
     Returns: (tree, errors, None)
+    Always returns an ElementTree if parsing succeeds.
     """
     try:
         # STEP 1: Pre-cleaning
         cleaned_content = preprocess_file_content(raw_content)
 
-        # STEP 2: Sanitize & only after validation — so nothing is lost before validation
+        # STEP 2: Sanitize
         cleaned_content = sanitize_unescaped_ampersands(cleaned_content)
 
-        # STEP 3: Replace known entities AFTER validation
+        # STEP 3: Replace known entities
         cleaned_content = replace_entities_with_numeric(cleaned_content)
 
-        wrapped = f"<root>{cleaned_content}</root>"
         parser = etree.XMLParser(
             recover=False,
             huge_tree=True,
@@ -275,12 +277,21 @@ def parse_xml(raw_content):
             remove_comments=True,
             resolve_entities=False
         )
-        tree = etree.fromstring(wrapped.encode("utf-8"), parser)
+
+        try:
+            # 🔑 Try parsing directly (works if file already has one root)
+            root = etree.fromstring(cleaned_content.encode("utf-8"), parser)
+        except etree.XMLSyntaxError:
+            # 🔑 If that fails, fallback to wrapping
+            wrapped = f"<root>{cleaned_content}</root>"
+            root = etree.fromstring(wrapped.encode("utf-8"), parser)
+
+        tree = etree.ElementTree(root)
         return tree, [], None
 
     except etree.XMLSyntaxError as e:
         categorized_errors = []
-        seen_messages = set()  # Track unique error messages to avoid duplicates
+        seen_messages = set()
         lines = raw_content.splitlines()
 
         for entry in e.error_log:
@@ -288,24 +299,21 @@ def parse_xml(raw_content):
             line = entry.line
             col = entry.column
             context = lines[line-1].strip() if 0 < line <= len(lines) else "N/A"
-            
-            # Skip duplicate messages
+
             error_key = (line, col, msg)
             if error_key in seen_messages:
                 continue
             seen_messages.add(error_key)
+
             if "Premature end of data in tag" in msg:
                 continue
 
-            # Improved error categorization
             lower_msg = msg.lower()
             if any(x in lower_msg for x in ["xmlparseentityref", "unescaped", "no name", "amp", "lt", "gt", "semicolon"]):
                 category = "Repent"
             elif "tag mismatch" in lower_msg:
-                # Skip root tag mismatch errors
                 if "root" in lower_msg:
                     continue
-                # Check if this is actually a nesting issue
                 if "not properly nested" in lower_msg or "misnested" in lower_msg:
                     category = "Reptag-nest"
                 else:
@@ -315,17 +323,9 @@ def parse_xml(raw_content):
             else:
                 category = "CheckSGM"
 
-            categorized_errors.append((
-                category,
-                line,
-                col,
-                msg,
-                context
-            ))
+            categorized_errors.append((category, line, col, msg, context))
 
-        # Sort errors by line number for better reporting
         categorized_errors.sort(key=lambda x: x[1])
-        
         return None, categorized_errors, None
 
     except Exception as e:

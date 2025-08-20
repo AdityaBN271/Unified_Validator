@@ -88,9 +88,10 @@ BALANCED_TAGS = {
 
 # List of tags including non-closing tags
 SUPPORTED_TAGS = {
-    'EM', 'EMB', 'EMU', 'EMS', 'EMBI', 'EMBU', 'EMBUI', 'EMBUSI','EMUS','EMBS','EMBUS',"author","IMAGE",
+    'EM', 'EMB', 'EMU', 'EMS', 'EMBI', 'EMBU', 'EMBUI', 'EMBUSI','EMUS','EMBS','EMBUS',"author","IMAGE","root","P00",
     'EMUI', 'EMSI', 'EMUSI', 'SUP', 'SUB', 'FN', 'T', 'A', 'fnr', 'fnt', 'P20','P02',
-    'fnr*', 'fnt*', 'fnt1', 'fnt2', 'fnt3', 'AN', 'dgn',"****HEADNOTE****","<****FOOTNOTE****>"             # Add all variants here too
+    'fnr*', 'fnt*', 'fnt1', 'fnt2', 'fnt3', 'AN', 'dgn',"****HEADNOTE****","<****FOOTNOTE****>" , "Page", "CN", "HN02", "B22", "HN68", "HN24", "HN46",
+    "P20", "P24", "P42", "B44", "B42", "B24", "C5", "EMBU", "EMB"           # Add all variants here too
                       
 }
 
